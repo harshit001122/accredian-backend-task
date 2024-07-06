@@ -1,41 +1,63 @@
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+const express = require('express');
+const { PrismaClient } = require('@prisma/client');
+const nodemailer = require('nodemailer');
+const bodyParser = require('body-parser');
+const cors = require('cors');
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+const prisma = new PrismaClient();
+const app = express();
 
-var app = express();
+const port = 5000;
 
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'jade');
+app.use(bodyParser.json());
+app.use(cors());
 
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+const corsOptions = {
+  origin: 'http://localhost:3000',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
+app.post('/api/referrals', async (req, res) => {
+  const { referrerName, referrerEmail, refereeName, refereeEmail } = req.body;
 
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+  try {
+    const referral = await prisma.referral.create({
+      data: {
+        referrerName,
+        referrerEmail,
+        refereeName,
+        refereeEmail,
+      },
+    });
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'harshdh55@gmail.com',
+        pass: 'T@tiy@bich00',
+      },
+    });
+
+    const mailOptions = {
+      from: 'harshdh55@gmail.com',
+      to: refereeEmail,
+      subject: 'You have been referred!',
+      text: `Hi ${refereeName},\n\n${referrerName} has referred you to our platform. Check it out!`,
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        return res.status(500).json({ error: 'Error sending email' });
+      }
+      res.status(200).json({ message: 'Referral created and email sent' });
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Error creating referral' });
+  }
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
-});
-
+app.listen(port, ()=>{
+  console.log(`Serrver is listning on port ${port}`)
+})
 module.exports = app;
